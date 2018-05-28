@@ -45,14 +45,18 @@ type cache interface {
 	Keys() int64
 }
 
+// State 用于保存一些信息
+type State struct {
+	MaxMemory     int64
+	CurrentMemory int64
+}
+
 // Cache 对Cache的实现
 type Cache struct {
 	cache
-	// 内存大小
-	maxMemory int64
-	// 当前内存大小
-	currentMemory int64
-	// 读写锁
+	// 用于保存一些信息
+	state *State
+	// 读写
 	lock sync.RWMutex
 	// lru
 	lruList *LruList
@@ -72,11 +76,14 @@ func New(args ...string) *Cache {
 	}
 
 	lruList := NewLruList()
+	state := &State{
+		MaxMemory:     memory,
+		CurrentMemory: 0,
+	}
 
 	return &Cache{
-		maxMemory:     memory,
-		currentMemory: 0,
-		lruList:       lruList,
+		state:   state,
+		lruList: lruList,
 	}
 }
 
@@ -89,7 +96,7 @@ func (c *Cache) SetMaxMemory(size string) bool {
 		return false
 	}
 
-	c.maxMemory = realSize
+	c.state.MaxMemory = realSize
 
 	return true
 }
@@ -120,7 +127,7 @@ func (c *Cache) Set(key string, val string, args ...time.Duration) (bool, error)
 		return false, ErrValueInvalid
 	}
 
-	c.currentMemory = c.currentMemory + keySize + valSize
+	c.state.Add(keySize + valSize)
 
 	c.lock.Lock()
 
@@ -132,8 +139,8 @@ func (c *Cache) Set(key string, val string, args ...time.Duration) (bool, error)
 	c.lock.Unlock()
 
 	// 触发lru
-	if c.currentMemory >= c.maxMemory {
-		c.lru()
+	if c.state.CurrentMemory >= c.state.MaxMemory {
+		go c.lru()
 	}
 
 	return true, nil
@@ -183,7 +190,7 @@ func (c *Cache) Del(key string) bool {
 
 		keySize := c.getSize(key)
 		valSize := c.getSize(c.lruList.items[key].value)
-		c.currentMemory = c.currentMemory - keySize - valSize
+		c.state.Add(-(keySize + valSize))
 	}
 
 	c.lock.Unlock()
@@ -209,7 +216,7 @@ func (c *Cache) Flush() bool {
 	c.lock.Lock()
 
 	c.lruList = NewLruList()
-	c.currentMemory = 0
+	c.state.CurrentMemory = 0
 
 	c.lock.Unlock()
 
@@ -265,7 +272,7 @@ func (c *Cache) getSize(val string) int64 {
 // removeTailNode 触发lru，删除尾部节点
 func (c *Cache) lru() {
 
-	for c.currentMemory >= c.maxMemory {
+	for c.state.CurrentMemory >= c.state.MaxMemory {
 
 		c.lock.Lock()
 
@@ -275,10 +282,14 @@ func (c *Cache) lru() {
 			keySize := c.getSize(node.key)
 			valSize := c.getSize(node.data.value)
 
-			c.currentMemory = c.currentMemory - keySize - valSize
+			c.state.Add(-(keySize + valSize))
 		}
 
 		c.lock.Unlock()
 	}
+}
 
+// Add 用于修改currentMemory
+func (s *State) Add(memory int64) {
+	s.CurrentMemory += memory
 }

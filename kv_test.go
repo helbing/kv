@@ -45,12 +45,14 @@ func Test_key_exipre(t *testing.T) {
 
 func Test_is_lru(t *testing.T) {
 	kv := New()
-	for i := 0; i < 1200; i++ {
+	for i := 0; i < 10000; i++ {
 		kv.Set(fmt.Sprintf("test_%d", i), strings.Repeat("test", 256))
 	}
 
-	if kv.currentMemory >= kv.maxMemory {
-		t.Fatalf("Lru not doing, current memory is %d, max memory is %d", kv.currentMemory, kv.maxMemory)
+	time.Sleep(1 * time.Second)
+
+	if kv.state.CurrentMemory >= kv.state.MaxMemory {
+		t.Fatalf("Lru not doing, current memory is %d, max memory is %d", kv.state.CurrentMemory, kv.state.MaxMemory)
 	}
 }
 
@@ -76,8 +78,8 @@ func Test_memory_size(t *testing.T) {
 	kv := New()
 	kv.Set("name", "helbing")
 
-	if kv.currentMemory != int64(len("name")+len("helbing")) {
-		t.Errorf("Memory size is error, the error size is %d, the true size is %d", kv.currentMemory, int64(len("helbing")))
+	if kv.state.CurrentMemory != int64(len("name")+len("helbing")) {
+		t.Errorf("Memory size is error, the error size is %d, the true size is %d", kv.state.CurrentMemory, int64(len("helbing")))
 	}
 }
 
