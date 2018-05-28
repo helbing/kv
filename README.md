@@ -18,7 +18,7 @@ cache := kv.New()
 cache := kv.New("1GB")
 ```
 
-### 添加缓存
+### 添加缓存
 
 ```go
 cache.Set(key, value)
